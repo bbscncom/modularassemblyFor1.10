@@ -1,0 +1,89 @@
+name: Manual Mod Release
+
+on:
+  workflow_dispatch:  # 手动触发
+
+permissions:
+  contents: write
+  
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: 17  # 可根据需要改为 17 等
+
+      - name: Read mod version from gradle.properties
+        id: get_version
+        run: |
+          version=$(grep "^mod_version\s*=" gradle.properties | cut -d'=' -f2 | tr -d ' ')
+          echo "mod_version=$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Get latest Git tag
+        id: get_latest_tag
+        run: |
+          git fetch --tags
+          tag=$(git tag --sort=-v:refname | head -n 1)
+          if [ -z "$tag" ]; then
+            echo "No tag found, using default v0.0.0"
+            echo "latest_tag=v0.0.0" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found latest tag: $tag"
+            echo "latest_tag=$tag" >> "$GITHUB_OUTPUT"
+          fi
+
+
+      - name: Compare versions
+        id: compare_versions
+        run: |
+          # Compare version strings, assuming semantic versioning (e.g., 1.2.3 < 1.2.4)
+          current_version=${{ steps.get_version.outputs.version }}
+          latest_tag=${{ steps.get_latest_tag.outputs.latest_tag }}
+
+          # Extract version numbers (Assuming format vX.Y.Z)
+          current_version_num=$(echo $current_version | sed 's/v//')
+          latest_tag_num=$(echo $latest_tag | sed 's/v//')
+
+          # Compare versions (numeric comparison)
+          if [ "$(echo -e "$latest_tag_num\n$current_version_num" | sort -V | head -n1)" != "$current_version_num" ]; then
+            echo "Latest version ($latest_tag) is greater than current version ($current_version). Proceeding with build and release."
+            echo "proceed=true" >> "$GITHUB_ENV"
+          else
+            echo "Current version ($current_version) is greater or equal to latest version ($latest_tag). Skipping build and release."
+            echo "proceed=false" >> "$GITHUB_ENV"
+          fi
+        #env:
+          #GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build mod
+        if: env.proceed == 'true'
+        run: ./gradlew build
+
+      - name: Create Git tag
+        if: env.proceed == 'true'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag v${{ steps.get_version.outputs.version }}
+          git push origin v${{ steps.get_version.outputs.version }}
+
+      - name: Create GitHub Release
+        if: env.proceed == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: v${{ steps.get_version.outputs.version }}
+          files: build/libs/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
