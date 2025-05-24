@@ -1,5 +1,4 @@
-mc 1.12 
-only thing to do that keep certain number for items of ae interface's all pattern
-place the keeper controller connetct to ae net  , then insert the upgrade card to ae interface your want to keep number.  right click upgrade card to set keepnumber and percraft number
+for divine journal 2 package, only add a function from modularmachinery 1.11.0
+shouldn't hava bug because i play  divine journal 2 to end with this
 
-version 0.0.1 
+not solve the problem about modular controller mod because i not use it
